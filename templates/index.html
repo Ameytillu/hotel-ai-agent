@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hotel AI Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-white min-h-screen font-sans">
+  <div class="max-w-3xl mx-auto py-12 px-4">
+    <h1 class="text-3xl font-bold text-center mb-6 text-blue-700">🏨 Hotel AI Assistant</h1>
+
+    <div class="mb-4">
+      <label class="block font-medium mb-2">Select Task</label>
+      <select id="task" class="w-full p-2 border rounded">
+        <option>Analyze Review</option>
+        <option>Ask Hotel Question</option>
+      </select>
+    </div>
+
+    <textarea id="userInput" rows="5" class="w-full p-4 border rounded" placeholder="Enter your review or question..."></textarea>
+    <button onclick="sendMessage()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">Ask Agent</button>
+
+    <div id="response" class="mt-6 bg-white shadow p-4 rounded text-gray-800 hidden"></div>
+  </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("userInput").value;
+      const task = document.getElementById("task").value;
+      const resBox = document.getElementById("response");
+      resBox.innerText = "Loading...";
+      resBox.classList.remove("hidden");
+
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ input: input, task: task })
+      });
+      const data = await res.json();
+      resBox.innerText = data.response;
+    }
+  </script>
+</body>
+</html>
