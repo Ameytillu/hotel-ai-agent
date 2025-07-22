@@ -13,3 +13,10 @@ __pycache__/
 
 # Ignore raw data files
 *.csv
+
+# Byte-compiled / optimized / DLL files
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
