@@ -5,17 +5,17 @@ from model_loader import load_phi_model
 import torch
 
 # --- Page Settings ---
-st.set_page_config(page_title="Phi LLM Fine-Tuned Hotel Agent", layout="wide")
+st.set_page_config(page_title="Phi SLM Fine-Tuned Hotel Agent", layout="wide")
 
 # --- Load Fine-Tuned Model ---
-@st.cache_resource(show_spinner="Loading Phi LLM Fine-Tuned model...")
+@st.cache_resource(show_spinner="Loading Phi SLM Fine-Tuned model...")
 def load_model():
     return load_phi_model("D:/your_model_directory")  # Update path if needed
 
 tokenizer, model = load_model()
 
 # --- UI Header ---
-st.title("🏨 Hotel Concierge AI - Powered by Phi LLM (Fine-Tuned)")
+st.title("🏨 Hotel Concierge AI - Powered by Phi SLM (Fine-Tuned)")
 st.markdown(
     """
     👋 Welcome to your personal **Hotel Concierge Agent**, powered by your **fine-tuned Phi LLM**!  
