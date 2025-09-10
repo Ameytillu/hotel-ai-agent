@@ -1,25 +1,50 @@
-from flask import Flask, render_template, request, jsonify
-from agents.sentiment_agent import respond_to_review
-from agents.faq_agent import get_best_answer
+# app.py
 
-app = Flask(__name__)
+import streamlit as st
+from model_loader import load_phi_model
+import torch
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+# --- Page Settings ---
+st.set_page_config(page_title="Phi LLM Fine-Tuned Hotel Agent", layout="wide")
 
-@app.route('/ask', methods=['POST'])
-def ask():
-    data = request.get_json()
-    user_input = data.get("input")
-    task = data.get("task")
+# --- Load Fine-Tuned Model ---
+@st.cache_resource(show_spinner="Loading Phi LLM Fine-Tuned model...")
+def load_model():
+    return load_phi_model("D:/your_model_directory")  # Update path if needed
 
-    if task == "Analyze Review":
-        response = respond_to_review(user_input)
-    else:
-        response = get_best_answer(user_input)
+tokenizer, model = load_model()
 
-    return jsonify({"response": response})
+# --- UI Header ---
+st.title("🏨 Hotel Concierge AI - Powered by Phi LLM (Fine-Tuned)")
+st.markdown(
+    """
+    👋 Welcome to your personal **Hotel Concierge Agent**, powered by your **fine-tuned Phi LLM**!  
+    This assistant understands **bookings, policies, FAQs, spa, shuttle, restaurant services**, and more.
+    """
+)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# --- Initialize Chat Memory ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# --- Display Chat History ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# --- Input Box for User ---
+user_input = st.chat_input("Type a message like: 'I want to book a room from Friday to Sunday'")
+if user_input:
+    st.chat_message("user").markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Generate Response
+    input_ids = tokenizer.encode(user_input, return_tensors="pt").to(model.device)
+    output = model.generate(input_ids, max_new_tokens=250, pad_token_id=tokenizer.eos_token_id)
+    response = tokenizer.decode(output[0], skip_special_tokens=True)
+
+    # Extract only assistant's reply
+    reply = response.split(user_input)[-1].strip()
+
+    st.chat_message("assistant").markdown(reply)
+    st.session_state.messages.append({"role": "assistant", "content": reply})
