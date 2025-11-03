@@ -1,6 +1,14 @@
+# Core UI & Environment
 streamlit>=1.33
+python-dotenv>=1.0.0
+pandas>=2.0.0
+
+# OpenAI client
+openai>=1.0.0
+
+# Model and RAG dependencies
 transformers>=4.41
-torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1.0
 peft>=0.11.0
 accelerate>=0.30.0
 safetensors>=0.4.3
