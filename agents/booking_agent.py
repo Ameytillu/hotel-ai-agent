@@ -1,32 +1,24 @@
-import pandas as pd
-import json
-from datetime import datetime
-from agents.email_sender import send_confirmation_email
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
-availability_df = pd.read_csv("data/room_availability.csv")
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-def book_room(guest, room_type, checkin, checkout):
-    record = {
-        "type": "Room",
-        "room_type": room_type,
-        "checkin": checkin,
-        "checkout": checkout,
-        "guest": guest,
-        "timestamp": datetime.now().isoformat()
-    }
-    with open("data/bookings.json", "a") as f:
-        f.write(json.dumps(record) + "\n")
+def booking_response(user_query: str):
+    """Handles booking or reservation-related questions."""
+    prompt = f"The guest asked: '{user_query}'. Provide an informative and polite response related to hotel bookings or reservations."
 
-    body = f"""Hello {guest['first_name']} {guest['last_name']},
-
-Your room booking is confirmed.
-
-Room Type: {room_type}
-Check-in: {checkin}
-Check-out: {checkout}
-
-We look forward to your stay!
-
-— Hotel Team
-"""
-    send_confirmation_email(guest['email'], "Room Booking Confirmation", body)
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You are a hotel booking assistant helping guests with availability, reservations, and cancellations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.6,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        return f"⚠️ Sorry, I'm having trouble accessing the booking service right now. (Error: {str(e)})"

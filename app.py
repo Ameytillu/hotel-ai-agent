@@ -1,50 +1,76 @@
-# app.py
-
 import streamlit as st
-from model_loader import load_phi_model
-import torch
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+import openai
 
-# --- Page Settings ---
-st.set_page_config(page_title="Phi SLM Fine-Tuned Hotel Agent", layout="wide")
+# === Display current OpenAI version on sidebar ===
+st.sidebar.info(f"✅ OpenAI version: {openai.__version__}")
 
-# --- Load Fine-Tuned Model ---
-@st.cache_resource(show_spinner="Loading Phi SLM Fine-Tuned model...")
-def load_model():
-    return load_phi_model("D:/your_model_directory")  # Update path if needed
+# === Load environment variables ===
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-tokenizer, model = load_model()
+# === Import router agent ===
+from agents.router_agent import route_query
+from agents.rag_agent import search_rag_database
 
-# --- UI Header ---
-st.title("🏨 Hotel Concierge AI - Powered by Phi SLM (Fine-Tuned)")
-st.markdown(
+# === Streamlit Page Configuration ===
+st.set_page_config(page_title="🏨 Hotel Concierge AI", page_icon="🏨", layout="centered")
+
+st.title("🏨 Hotel Concierge AI")
+st.markdown("""
+Your personalized **AI Concierge** — powered by **OpenAI GPT-4o** and your hotel’s custom AI agents.  
+Ask me anything related to **bookings**, **restaurant menu**, **spa services**, **policies**, **FAQs**, or **shuttle timings** —  
+I’ll automatically route your question to the right department.
+""")
+
+# === Maintain chat history ===
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# === Chat input field ===
+user_query = st.chat_input("Type your message here...")
+
+def get_router_response(message):
     """
-    👋 Welcome to your personal **Hotel Concierge Agent**, powered by your **fine-tuned Phi LLM**!  
-    This assistant understands **bookings, policies, FAQs, spa, shuttle, restaurant services**, and more.
+    Handles RAG lookup + router agent decision automatically.
     """
-)
+    try:
+        # Step 1 — Check RAG database first (local knowledge)
+        rag_response = search_rag_database(message)
+        if rag_response:
+            return rag_response
 
-# --- Initialize Chat Memory ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+        # Step 2 — Route query to appropriate agent
+        response = route_query(message)
+        return response
 
-# --- Display Chat History ---
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    except Exception as e:
+        return f"⚠️ Error while processing your request: {str(e)}"
 
-# --- Input Box for User ---
-user_input = st.chat_input("Type a message like: 'I want to book a room from Friday to Sunday'")
-if user_input:
-    st.chat_message("user").markdown(user_input)
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# === Display chat history ===
+for chat in st.session_state.history:
+    with st.chat_message(chat["role"]):
+        st.markdown(chat["content"])
 
-    # Generate Response
-    input_ids = tokenizer.encode(user_input, return_tensors="pt").to(model.device)
-    output = model.generate(input_ids, max_new_tokens=250, pad_token_id=tokenizer.eos_token_id)
-    response = tokenizer.decode(output[0], skip_special_tokens=True)
+# === Handle new messages ===
+if user_query:
+    st.session_state.history.append({"role": "user", "content": user_query})
 
-    # Extract only assistant's reply
-    reply = response.split(user_input)[-1].strip()
+    with st.chat_message("user"):
+        st.markdown(user_query)
 
-    st.chat_message("assistant").markdown(reply)
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+    with st.chat_message("assistant"):
+        reply = get_router_response(user_query)
+        st.markdown(reply)
+
+    st.session_state.history.append({"role": "assistant", "content": reply})
+
+# === Footer ===
+st.sidebar.markdown("""
+---
+🧠 **Mode:** Unified Router Agent  
+💡 This system automatically selects the correct hotel agent for each query.
+""")

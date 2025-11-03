@@ -1,32 +1,36 @@
-import pandas as pd
-import json
-from datetime import datetime
-from agents.email_sender import send_confirmation_email
+from openai import OpenAI
+from dotenv import load_dotenv
+import os, pandas as pd
 
-shuttle_df = pd.read_csv("data/shuttle_service.csv")
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-def book_shuttle(guest, pickup_time, from_location, to_location):
-    record = {
-        "type": "Shuttle",
-        "pickup_time": pickup_time,
-        "from": from_location,
-        "to": to_location,
-        "guest": guest,
-        "timestamp": datetime.now().isoformat()
-    }
-    with open("data/bookings.json", "a") as f:
-        f.write(json.dumps(record) + "\n")
+def shuttle_response(user_query: str):
+    """Provides shuttle timing and route info from shuttle_service.csv."""
+    try:
+        df = pd.read_csv("data/shuttle_service.csv")
+    except FileNotFoundError:
+        df = pd.DataFrame()
 
-    body = f"""Hello {guest['first_name']} {guest['last_name']},
+    match = df[df['route'].str.contains(user_query, case=False, na=False)] if 'route' in df else None
 
-Your shuttle service has been booked.
+    if match is not None and not match.empty:
+        row = match.iloc[0]
+        info = f"{row['service_name']} at {row['time']} – {row['route']} (${row['price']})"
+        prompt = f"Guest asked: {user_query}\nSchedule found: {info}\nRespond clearly and helpfully."
+    else:
+        prompt = f"The guest asked: '{user_query}'. No exact shuttle match found. Provide a general shuttle service answer."
 
-Pickup: {pickup_time}
-From: {from_location}
-To: {to_location}
-
-Safe travels!
-
-— Hotel Team
-"""
-    send_confirmation_email(guest['email'], "Shuttle Booking Confirmation", body)
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You are a transportation assistant helping hotel guests with shuttle timings and routes."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.6,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        return f"⚠️ Sorry, I'm having trouble accessing shuttle information right now. (Error: {str(e)})"
