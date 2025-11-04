@@ -1,0 +1,10 @@
+room_type,room_number,date,available,price
+Standard,101,2025-07-15,TRUE,100
+Standard,102,2025-07-15,TRUE,100
+Deluxe,201,2025-07-15,TRUE,150
+Suite,301,2025-07-15,FALSE,250
+Standard,101,2025-07-16,TRUE,100
+Standard,102,2025-07-16,TRUE,100
+Deluxe,201,2025-07-16,TRUE,150
+Suite,301,2025-07-16,TRUE,250
+

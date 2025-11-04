@@ -1,0 +1,6 @@
+service_name,time,route,price
+Airport Shuttle,06:00 AM,Hotel to Airport,25
+Airport Shuttle,07:00 AM,Airport to Hotel,25
+City Center Shuttle,09:00 AM,Hotel to City Center,10
+City Center Shuttle,10:00 AM,City Center to Hotel,10
+
