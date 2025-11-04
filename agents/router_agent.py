@@ -1,9 +1,10 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import streamlit as st
 
 from agents.faq_agent import faq_answer
-from agents.booking_agent import booking_response
+from agents.booking_agent import booking_agent
 from agents.restaurant_agent import restaurant_response
 from agents.spa_agent import spa_response
 from agents.policy_agent import policy_response
@@ -19,7 +20,13 @@ def route_query(user_query: str):
     Decides which specialized agent should handle the guest query.
     """
 
-    # Step 1 — Ask GPT to classify the intent
+    if "active_agent" not in st.session_state:
+        st.session_state.active_agent = None
+
+    # --- Context memory: stay in the same flow ---
+    if st.session_state.active_agent == "booking":
+        return booking_agent(user_query)
+
     try:
         classification_prompt = f"""
         Classify the user's intent into one of these categories:
@@ -28,6 +35,7 @@ def route_query(user_query: str):
 
         Respond with ONLY one word (the category name).
         """
+
         classification = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -40,11 +48,11 @@ def route_query(user_query: str):
         intent = classification.choices[0].message.content.strip().lower()
         print(f"[Router] Detected intent → {intent}")
 
-        # Step 2 — Route query to the correct agent
         if "faq" in intent:
             return faq_answer(user_query)
         elif "booking" in intent:
-            return booking_response(user_query)
+            st.session_state.active_agent = "booking"  # remember session
+            return booking_agent(user_query)
         elif "restaurant" in intent:
             return restaurant_response(user_query)
         elif "spa" in intent:
@@ -54,7 +62,6 @@ def route_query(user_query: str):
         elif "policy" in intent:
             return policy_response(user_query)
         else:
-            # Fallback to FAQ or general AI
             return faq_answer(user_query)
 
     except Exception as e:
