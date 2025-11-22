@@ -1,0 +1,22 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore model files
+*.pkl
+
+# Ignore environment/config files
+.env
+
+# Ignore raw data files
+*.csv
+
+# Byte-compiled / optimized / DLL files
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
