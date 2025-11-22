@@ -1,7 +1,17 @@
+"""Main router agent that dispatches guest intents to specialized handlers."""
+
+from __future__ import annotations
+
+from typing import Callable, Dict
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
-import streamlit as st
+
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
 
 from agents.faq_agent import faq_answer
 from agents.booking_agent import booking_agent
@@ -10,112 +20,70 @@ from agents.spa_agent import spa_response
 from agents.policy_agent import policy_response
 from agents.shuttle_agent import shuttle_response
 
+try:
+    from agents import sentiment_agent
+    HAS_SENTIMENT = True
+except ImportError:
+    HAS_SENTIMENT = False
+
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-
-def route_query(user_query: str):
-    """
-    The 'brain' of your concierge system.
-    Decides which specialized agent should handle the guest query.
-    """
-
-    if "active_agent" not in st.session_state:
-        st.session_state.active_agent = None
-
-    # --- Context memory: stay in the same flow ---
-    if st.session_state.active_agent == "booking":
-        return booking_agent(user_query)
-"""Main router agent that dispatches guest intents to specialized handlers."""
-
-from __future__ import annotations
-
-from typing import Callable, Dict
-
-from agents import (
-    booking_agent,
-    faq_agent,
-    restaurant_agent,
-    spa_agent,
-    shuttle_agent,
-    sentiment_agent,
-    policy_agent,
-)
 
 Handler = Callable[[str], str]
 
 
 def _ensure_string(response: object) -> str:
     """Convert the agent response to a string."""
-
     if isinstance(response, str):
         return response
     return "" if response is None else str(response)
 
 
 def _handle_booking_request(user_message: str) -> str:
-    handler = getattr(booking_agent, "handle", None)
-    if callable(handler):
-        return _ensure_string(handler(user_message))
-
-    fallback = getattr(booking_agent, "booking_agent", None)
-    if callable(fallback):
-        return _ensure_string(fallback(user_message))
-
-    return "I can assist with bookings once the booking agent is configured."
+    return _ensure_string(booking_agent(user_message))
 
 
 def _handle_room_upgrade(user_message: str) -> str:
-    handler = getattr(booking_agent, "handle_upgrade", None)
-    if callable(handler):
-        return _ensure_string(handler(user_message))
-
     return _handle_booking_request(user_message)
 
 
 def _handle_complaint(user_message: str) -> str:
-    handler = getattr(policy_agent, "handle_complaint", None)
-    if callable(handler):
-        return _ensure_string(handler(user_message))
-
-    policy_handler = getattr(policy_agent, "policy_response", None)
-    if callable(policy_handler):
-        return _ensure_string(policy_handler(user_message))
-
-    return _handle_feedback_review(user_message)
+    return _ensure_string(policy_response(user_message))
 
 
 def _handle_general_question(user_message: str) -> str:
-    return _ensure_string(faq_agent.faq_answer(user_message))
+    return _ensure_string(faq_answer(user_message))
 
 
 def _handle_restaurant(user_message: str) -> str:
-    return _ensure_string(restaurant_agent.restaurant_response(user_message))
+    return _ensure_string(restaurant_response(user_message))
 
 
 def _handle_spa(user_message: str) -> str:
-    return _ensure_string(spa_agent.spa_response(user_message))
+    return _ensure_string(spa_response(user_message))
 
 
 def _handle_shuttle(user_message: str) -> str:
-    return _ensure_string(shuttle_agent.shuttle_response(user_message))
+    return _ensure_string(shuttle_response(user_message))
 
 
 def _handle_feedback_review(user_message: str) -> str:
-    handler = getattr(sentiment_agent, "handle", None)
-    if callable(handler):
-        return _ensure_string(handler(user_message))
+    if HAS_SENTIMENT:
+        handler = getattr(sentiment_agent, "handle", None)
+        if callable(handler):
+            return _ensure_string(handler(user_message))
 
-    review_handler = getattr(sentiment_agent, "respond_to_review", None)
-    if callable(review_handler):
-        return _ensure_string(review_handler(user_message))
+        review_handler = getattr(sentiment_agent, "respond_to_review", None)
+        if callable(review_handler):
+            return _ensure_string(review_handler(user_message))
 
-    analyzer = getattr(sentiment_agent, "analyze_sentiment", None)
-    if callable(analyzer):
-        sentiment = analyzer(user_message)
-        if sentiment.lower() == "negative":
-            return "We’re sorry you had a bad experience. Our team will contact you shortly."
-        return "Thank you for sharing your feedback with us!"
+        analyzer = getattr(sentiment_agent, "analyze_sentiment", None)
+        if callable(analyzer):
+            sentiment = analyzer(user_message)
+            if sentiment.lower() == "negative":
+                return "We're sorry you had a bad experience. Our team will contact you shortly."
+            return "Thank you for sharing your feedback with us!"
 
     return _handle_general_question(user_message)
 
@@ -134,9 +102,32 @@ INTENT_DISPATCH: Dict[str, Handler] = {
 
 def route_to_agent(intent: str, user_message: str) -> str:
     """Route the user message to the agent that can handle the provided intent."""
-
     normalized_intent = (intent or "").strip().lower()
     handler = INTENT_DISPATCH.get(normalized_intent, _handle_general_question)
+
+    try:
+        return handler(user_message)
+    except Exception as exc:
+        return _handle_general_question(
+            f"We encountered an issue while processing your request. Could you rephrase?"
+        )
+
+
+def route_query(user_query: str):
+    """
+    The 'brain' of your concierge system.
+    Decides which specialized agent should handle the guest query.
+    Supports both Streamlit and non-Streamlit environments (Flask, voice calls, SMS).
+    """
+    
+    # Handle session state for Streamlit
+    if HAS_STREAMLIT:
+        if "active_agent" not in st.session_state:
+            st.session_state.active_agent = None
+
+        # --- Context memory: stay in the same flow ---
+        if st.session_state.active_agent == "booking":
+            return booking_agent(user_query)
 
     try:
         classification_prompt = f"""
@@ -154,10 +145,6 @@ def route_to_agent(intent: str, user_message: str) -> str:
                 {"role": "user", "content": classification_prompt}
             ],
             temperature=0,
-        return handler(user_message)
-    except Exception as exc:  # pragma: no cover - defensive fallback
-        return _handle_general_question(
-            f"We encountered an issue while processing your request ({exc}). Could you rephrase?"
         )
 
         intent = classification.choices[0].message.content.strip().lower()
@@ -166,7 +153,8 @@ def route_to_agent(intent: str, user_message: str) -> str:
         if "faq" in intent:
             return faq_answer(user_query)
         elif "booking" in intent:
-            st.session_state.active_agent = "booking"  # remember session
+            if HAS_STREAMLIT:
+                st.session_state.active_agent = "booking"
             return booking_agent(user_query)
         elif "restaurant" in intent:
             return restaurant_response(user_query)
